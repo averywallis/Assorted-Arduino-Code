@@ -10,10 +10,11 @@
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 #define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
 
-bool USB_Serial = false;
-bool print_chars = false;
-bool print_data = false;
-bool print_stats = false;
+bool USB_Serial = true; //do we want to have USB serial? needed for anything you want to print ot the computer
+bool USB_wait = false; //wait for USB to ininitialize (open serial port) before executing rest of code?
+bool print_chars = true; //print NMEA chars as they come in
+bool print_data = false; //print the lat, lon, age, fix data
+bool print_stats = false; //print the statistics of the messages received
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 TinyGPS gps;
@@ -22,8 +23,10 @@ void setup()
 {
   if (USB_Serial) {
     Serial.begin(115200); //begin USB Serial
-    while (!Serial) {
-      delay(1);
+    if (USB_wait) {
+      while (!Serial) {
+        delay(1);
+      }
     }
   }
 
@@ -106,10 +109,7 @@ void loop()
       Serial.print(" PREC=");
       Serial.print(gps.hdop() == TinyGPS::GPS_INVALID_HDOP ? 0 : gps.hdop());
     }
-    if (age == TinyGPS::GPS_INVALID_AGE) {
-      display.println("No fix detected");
-    }
-    display.printf("%d:%d:%d  ", hour, minute, second);
+    display.printf("%02d:%02d:%02d  ", hour, minute, second);
     display.printf("%d/%d/%d\n", month, day, year);
     if (age == TinyGPS::GPS_INVALID_AGE) {
       display.println("No fix detected");
@@ -133,7 +133,7 @@ void loop()
     display.display();
   }
   else {
-    display.println("No valid data found");
+    display.println("No valid fix data");
     display.println("Check connections");
     display.println("Wait for GPS fix");
     display.display();
