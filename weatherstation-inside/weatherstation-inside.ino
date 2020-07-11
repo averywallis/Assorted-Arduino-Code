@@ -4,6 +4,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <TinyGPS++.h>
+#include "wiring_private.h" // pinPeripheral() function
 
 
 const int SDchipSelect = 2;
@@ -24,14 +25,18 @@ bool serial_wait = false; //boolean for waiting for serial grom computer
 bool serial_data = true; //boolean for printing sensor data over serial
 bool use_screen = true; //boolean for if we wanna use the screen or not
 bool screen_initialized = false;
-bool data_log = true;
+bool data_log = false;
 bool use_SD = false;
 bool print_packet = false;
 bool tinyGPS_debug = false;
 
 int packetNum = 1;
 
+//SPIClass SPI2 (&sercom1, 12, 13, 11, SPI_PAD_0_SCK_1, SERCOM_RX_PAD_3);
+
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
+//RH_RF95 rf95(RFM95_CS, RFM95_INT, SPI2);
+
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); //OLED on I2C
 
@@ -49,6 +54,7 @@ TinyGPSCustom alt(gps, "BME", 9); // $BME680 sentence, 9th element
 TinyGPSCustom altitudeUnits(gps, "BME", 10); // $BME680 sentence, 10th element
 
 
+
 void setup() {
   pinMode(RFM95_RST, OUTPUT);
   pinMode(LED, OUTPUT);
@@ -63,6 +69,11 @@ void setup() {
   }
   Serial.println("Serial initialized");
   delay(100);
+
+  //  SPI2.begin();
+  //  pinPeripheral(11, PIO_SERCOM);
+  //  pinPeripheral(12, PIO_SERCOM);
+  //  pinPeripheral(13, PIO_SERCOM);
 
   if (use_screen) {
     //initially screen
@@ -126,6 +137,7 @@ void setup() {
   rf95.setTxPower(23, false);
 
   if (use_SD) {
+    noInterrupts();
     Serial.println("Initializing SD card...");
     if (use_screen) {
       display.clearDisplay();
@@ -154,8 +166,8 @@ void setup() {
     }
     delay(200);
     resetScreen();
+    interrupts();
   }
-
 
 }
 
@@ -251,6 +263,13 @@ void loop() {
           display.println(altitudeUnits.value());
           display.display();
 
+        }
+
+        if (use_SD && data_log) {
+          noInterrupts();
+
+
+          interrupts();
         }
       }
 
