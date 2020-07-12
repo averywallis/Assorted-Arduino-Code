@@ -1,11 +1,11 @@
 #include <SPI.h>
 #include <SD.h>
 #include <RH_RF95.h>
+#include <RHSoftwareSPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <TinyGPS++.h>
-#include "wiring_private.h" // pinPeripheral() function
-
+#include "RTClib.h"
 
 const int SDchipSelect = 2;
 
@@ -25,17 +25,21 @@ bool serial_wait = false; //boolean for waiting for serial grom computer
 bool serial_data = true; //boolean for printing sensor data over serial
 bool use_screen = true; //boolean for if we wanna use the screen or not
 bool screen_initialized = false;
-bool data_log = false;
+bool data_log = true;
 bool use_SD = true;
-bool print_packet = false;
+bool print_packet = true;
 bool tinyGPS_debug = false;
+bool first_loop = true;
+
+String dateString = "";
 
 int packetNum = 1;
 
-//SPIClass SPI2 (&sercom1, 12, 13, 11, SPI_PAD_0_SCK_1, SERCOM_RX_PAD_3);
 
-RH_RF95 rf95(RFM95_CS, RFM95_INT);
-//RH_RF95 rf95(RFM95_CS, RFM95_INT, SPI2);
+RHSoftwareSPI soft;
+
+//RH_RF95 rf95(RFM95_CS, RFM95_INT);
+RH_RF95 rf95(RFM95_CS, RFM95_INT, soft);
 
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); //OLED on I2C
@@ -53,9 +57,11 @@ TinyGPSCustom gasUnits(gps, "BME", 8); // $BME680 sentence, 8th element
 TinyGPSCustom alt(gps, "BME", 9); // $BME680 sentence, 9th element
 TinyGPSCustom altitudeUnits(gps, "BME", 10); // $BME680 sentence, 10th element
 
+RTC_Millis rtc;
 
 
 void setup() {
+  soft.setPins(12, 11, 10);
   pinMode(RFM95_RST, OUTPUT);
   pinMode(LED, OUTPUT);
   digitalWrite(RFM95_RST, HIGH);
@@ -70,10 +76,8 @@ void setup() {
   Serial.println("Serial initialized");
   delay(100);
 
-  //  SPI2.begin();
-  //  pinPeripheral(11, PIO_SERCOM);
-  //  pinPeripheral(12, PIO_SERCOM);
-  //  pinPeripheral(13, PIO_SERCOM);
+  rtc.begin(DateTime(F(__DATE__), F(__TIME__)));
+
 
   if (use_screen) {
     //initially screen
@@ -97,7 +101,7 @@ void setup() {
   resetScreen();
 
   if (use_SD) {
-    noInterrupts();
+    //    noInterrupts();
     Serial.println("Initializing SD card...");
     if (use_screen) {
       display.clearDisplay();
@@ -126,7 +130,7 @@ void setup() {
     }
     delay(200);
     resetScreen();
-    interrupts();
+    //    interrupts();
   }
 
 
@@ -143,7 +147,6 @@ void setup() {
     display.display();
   }
 
-//  noInterrupts();
   while (!rf95.init()) {
     Serial.println("LoRa radio init failed");
     if (use_screen) {
@@ -171,11 +174,12 @@ void setup() {
   }
   Serial.print("Set Freq to: "); Serial.println(RF95_FREQ);
   rf95.setTxPower(23, false);
-//  interrupts();
+
 
 }
 
 void loop() {
+
   // put your main code here, to run repeatedly:
   if (rf95.available())
   {
@@ -190,7 +194,7 @@ void loop() {
       Serial.print("Buffer length: "); Serial.println(len);
       if (print_packet) {
         RH_RF95::printBuffer("Received: ", buf, len);
-        Serial.print("Got: ");
+        Serial.println("Received: ");
         Serial.println((char*)buf);
       }
       if (use_screen) {
@@ -272,6 +276,37 @@ void loop() {
         if (use_SD && data_log) {
           noInterrupts();
 
+          if (first_loop) {
+            DateTime now = rtc.now();
+            dateString += String(now.year());
+            dateString += " ";
+            dateString += String(now.month());
+            dateString += " ";
+            dateString += String(now.day());
+            dateString += " ";
+            dateString += String(now.hour());
+            dateString += " ";
+            dateString += String(now.minute());
+            dateString += " ";
+            dateString += String(now.second());
+            dateString += " ";
+            dateString += "weather.csv";
+            Serial.println(dateString);
+            first_loop = false;
+          }
+
+//          File dataFile = SD.open((char *) (timeYear + "-" + timeMonth + "-" + timeDay + "-" + timeHour + "-" + timeMinute + "-" + timeSecond + "-" +  + "weather.csv"), FILE_WRITE);
+          File dataFile = SD.open("weather.csv", FILE_WRITE);
+
+          if (dataFile) {
+            dataFile.println((char*)buf);
+            dataFile.close();
+            Serial.println("Data printed:");
+            Serial.println((char*)buf);
+          }
+          else {
+            Serial.println("Error opening file");
+          }
 
           interrupts();
         }
